@@ -18,13 +18,17 @@
 
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/uio.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
+//#include <sys/sendfile.h> //linux
 #include <netinet/in.h>
 
+// TODO add support for parameters
 typedef struct {
     int returncode;
     char *filename;
+    char *ext;
 } httpRequest;
 
 char *connection;
@@ -76,11 +80,11 @@ char *getMessage(int* fd)
             break;
         }
         
-        char *type = malloc(sizeof(char) * 18);
-        char *parameter = malloc(sizeof(char) * 18);
+        //char *type = malloc(sizeof(char) * 18);
+        //char *parameter = malloc(sizeof(char) * 18);
         
-        type = strtok(tmp, ":");
-        parameter = strtok(NULL, "");
+        //type = strtok(tmp, ":");
+        //parameter = strtok(NULL, "");
         
         block = realloc(block, size+oldsize);
         oldsize += size;
@@ -88,6 +92,9 @@ char *getMessage(int* fd)
     }
     
     free(tmp);
+    //tmp = NULL;
+    
+    printf("Not in getMessage()\n");
     
     return block;
 }
@@ -107,8 +114,10 @@ char * getFileName(char* msg, int* fd)
         handleExit(EXIT_FAILURE, fd);
     }
     
+    //gets file name from msg, puts into file
     sscanf(msg, "GET %s HTTP/1.1", file);
     
+    //accepts a quit command
     if(strcmp(file, "quit") == 0)
     {
         handleExit(EXIT_SUCCESS, fd);
@@ -122,13 +131,20 @@ char * getFileName(char* msg, int* fd)
     }
     
     char * ext = malloc(sizeof(char) * strlen(file));
+    
+    //if theres an extension puts its location in ext
     ext = strrchr(file, '.');
+    
+    //if no ext then assume html
+    // TODO assume lua instead
     if(ext == NULL && strcmp(file, "/") != 0)
     {
         ext = ".html";
         strcat(file, ext);
     }
     
+    //add html to the front to insure it checks the html folder
+    // TODO maybe ph = lua if lua is ext?
     char *ph = "html";
     strcpy(base, ph);
     strcat(base, file);
@@ -163,16 +179,26 @@ httpRequest parseRequest(char *msg, int* fd)
     {
         ret.returncode = 400;
         ret.filename   = "html/400.html";
+        ret.ext        = ".html";
     } else if(test2 == 0) {
         ret.returncode = 200;
         ret.filename   = "html/index.html";
+        ret.ext        = ".html";
     } else if (exists != NULL) {
         ret.returncode = 200;
         ret.filename   = filename;
+        char *extpointer = malloc(sizeof(char) * 10);
+        extpointer = strrchr(filename, '.');
+        char buff[6];
+        memcpy(buff, filename, 5);
+        buff[5] = '\0';
+        ret.ext        = buff;
+        //free(buff);
         fclose(exists);
     } else {
         ret.returncode = 404;
         ret.filename   = "html/404.html";
+        ret.ext        = ".html";
     }
     
     printf("Return code: %d, filename: %s\n", ret.returncode, ret.filename);
@@ -181,10 +207,6 @@ httpRequest parseRequest(char *msg, int* fd)
 
 int printHeader(int returncode, int* fd)
 {
-    //char *headerStart = "HTTP/1.0 ";
-    //char *headerEnd   = "\nServer: myserver v0.1\nContent-Type: text/html\n\n";
-    //char *hd = malloc(sizeof(headerStart) + sizeof(headerEnd) + 30);
-    
     char *header200 = "HTTP/1.0 200 OK\nServer: myserver v0.1\nContent-Type: text/html\n\n";
     char *header400 = "HTTP/1.0 400 Bad Request\nServer: myserver v0.1\nContent-Type: text/html\n\n";
     char *header404 = "HTTP/1.0 404 Not Found\nServer: myserver v0.1\nContent-Type: text/html\n\n";
@@ -216,7 +238,7 @@ int printHeader(int returncode, int* fd)
 
 int printFile(char *filename, int* fd)
 {
-    FILE *read;
+/*    FILE *read;
     if( (read = fopen(filename, "r")) == NULL)
     {
         printf("Error allocating read\n");
@@ -247,7 +269,38 @@ int printFile(char *filename, int* fd)
     
     free(temp);
     
-    return totalsize;
+    return totalsize;*/
+    
+    struct stat stat_buf;
+    off_t offset = 0;
+    
+    int file_desc = open(filename, O_RDONLY);
+    if(file_desc == -1)
+    {
+        printf("Error opening requested file\n");
+        handleExit(EXIT_FAILURE, fd);
+    }
+    
+    int frc = fstat(file_desc, &stat_buf);
+    if(frc != 0)
+    {
+        printf("FRC != 0");
+    }
+    
+    
+    int rc = sendfile(file_desc, *fd, offset, &stat_buf.st_size, NULL, 0);
+    if(rc == -1)
+    {
+        printf("Error sending file %s\n", filename);
+        handleExit(EXIT_FAILURE, fd);
+    }
+    if(rc != stat_buf.st_size)
+    {
+        printf("File transfer not complete:  %d of %d \n", rc, (int)stat_buf.st_size);
+        //handleExit(EXIT_FAILURE, fd);
+    }
+    close(file_desc);
+    return (int)stat_buf.st_size;
 }
 
 void * handle_http(void * p_clientfd)
