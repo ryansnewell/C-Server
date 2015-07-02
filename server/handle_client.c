@@ -84,15 +84,13 @@ char *getMessage(int* fd)
         {
             break;
         }
-<<<<<<< HEAD
-        
+
         //char *type = malloc(sizeof(char) * 18);
         //char *parameter = malloc(sizeof(char) * 18);
-        
+
         //type = strtok(tmp, ":");
         //parameter = strtok(NULL, "");
-        
-=======
+
 
         char *type = malloc(sizeof(char) * 18);
         char *parameter = malloc(sizeof(char) * 18);
@@ -100,21 +98,17 @@ char *getMessage(int* fd)
         type = strtok(tmp, ":");
         parameter = strtok(NULL, "");
 
->>>>>>> FETCH_HEAD
         block = realloc(block, size+oldsize);
         oldsize += size;
         strcat(block, tmp);
     }
 
     free(tmp);
-<<<<<<< HEAD
     //tmp = NULL;
-    
-    printf("Not in getMessage()\n");
-    
-=======
 
->>>>>>> FETCH_HEAD
+    printf("Not in getMessage()\n");
+
+
     return block;
 }
 
@@ -132,17 +126,14 @@ char * getFileName(char* msg, int* fd)
         perror("Error allocating file");
         handleExit(EXIT_FAILURE, fd);
     }
-<<<<<<< HEAD
-    
+
     //gets file name from msg, puts into file
     sscanf(msg, "GET %s HTTP/1.1", file);
-    
+
     //accepts a quit command
-=======
 
     sscanf(msg, "GET %s HTTP/1.1", file);
 
->>>>>>> FETCH_HEAD
     if(strcmp(file, "quit") == 0)
     {
         handleExit(EXIT_SUCCESS, fd);
@@ -156,10 +147,10 @@ char * getFileName(char* msg, int* fd)
     }
 
     char * ext = malloc(sizeof(char) * strlen(file));
-    
+
     //if theres an extension puts its location in ext
     ext = strrchr(file, '.');
-    
+
     //if no ext then assume html
     // TODO assume lua instead
     if(ext == NULL && strcmp(file, "/") != 0)
@@ -167,13 +158,10 @@ char * getFileName(char* msg, int* fd)
         ext = ".html";
         strcat(file, ext);
     }
-<<<<<<< HEAD
-    
+
     //add html to the front to insure it checks the html folder
     // TODO maybe ph = lua if lua is ext?
-=======
 
->>>>>>> FETCH_HEAD
     char *ph = "html";
     strcpy(base, ph);
     strcat(base, file);
@@ -203,12 +191,9 @@ httpRequest parseRequest(char *msg, int* fd)
     int test2 = strcmp(filename, "html/");
 
     FILE *exists = fopen(filename, "r");
-<<<<<<< HEAD
-    
-    ret.server = SERVERNAME;
-=======
 
->>>>>>> FETCH_HEAD
+    ret.server = SERVERNAME;
+
     if(test != NULL)
     {
         ret.returncode = 400;
@@ -228,7 +213,7 @@ httpRequest parseRequest(char *msg, int* fd)
         char *ext = strtok(NULL, "");
         free(buff);
         ret.ext        = ext;
-        
+
         printf("The extension is %s\n", buff);
         if(strcmp(buff, ".html") != 0){
             ret.type = "text/html\n";
@@ -238,7 +223,7 @@ httpRequest parseRequest(char *msg, int* fd)
             ret.type = strcat("image/", buff);
             ret.transfer_encoding = "binary\n";
         }
-        
+
         fclose(exists);
     } else {
         ret.returncode = 404;
@@ -253,15 +238,13 @@ httpRequest parseRequest(char *msg, int* fd)
 
 int printHeader(httpRequest details, int* fd)
 {
-<<<<<<< HEAD
+
     char *header200 = "HTTP/1.0 200 OK\nServer: myserver v0.1\nContent-Type: image/jpg\nContent-Transfer-Encoding: binary\n\n";
-=======
     //char *headerStart = "HTTP/1.0 ";
     //char *headerEnd   = "\nServer: myserver v0.1\nContent-Type: text/html\n\n";
     //char *hd = malloc(sizeof(headerStart) + sizeof(headerEnd) + 30);
 
     char *header200 = "HTTP/1.0 200 OK\nServer: myserver v0.1\nContent-Type: text/html\n\n";
->>>>>>> FETCH_HEAD
     char *header400 = "HTTP/1.0 400 Bad Request\nServer: myserver v0.1\nContent-Type: text/html\n\n";
     char *header404 = "HTTP/1.0 404 Not Found\nServer: myserver v0.1\nContent-Type: text/html\n\n";
     char *hd = malloc(sizeof(char) * 200);
@@ -287,9 +270,9 @@ int printHeader(httpRequest details, int* fd)
             return 0;
             break;
     }
-    
+
     printf("DEBUG\n");
-    
+
     hd = strcat(hd, "Server: ");
     hd = strcat(hd, details.server);
     hd = strcat(hd, "Content-Type: ");
@@ -299,7 +282,7 @@ int printHeader(httpRequest details, int* fd)
         hd = strcat(hd, "Content-Transfer-Encoding: ");
         hd = strcat(hd, details.transfer_encoding);
     }
-    
+
     hd = strcat(hd, "\n");
     printf("hd = %s\n", hd);
     sendMessage(hd, &(*fd));
@@ -338,27 +321,26 @@ int printFile(char *filename, int* fd)
     sendMessage("\n", &(*fd));
 
     free(temp);
-<<<<<<< HEAD
-    
+
     return totalsize;*/
-    
+
     struct stat stat_buf;
     off_t offset = 0;
-    
+
     int file_desc = open(filename, O_RDONLY);
     if(file_desc == -1)
     {
         printf("Error opening requested file\n");
         handleExit(EXIT_FAILURE, fd);
     }
-    
+
     int frc = fstat(file_desc, &stat_buf);
     if(frc != 0)
     {
         printf("FRC != 0");
     }
-    
-    
+
+
     int rc = sendfile(file_desc, *fd, offset, &stat_buf.st_size, NULL, 0);
     if(rc == -1)
     {
@@ -367,10 +349,8 @@ int printFile(char *filename, int* fd)
     }
     close(file_desc);
     return (int)stat_buf.st_size;
-=======
 
     return totalsize;
->>>>>>> FETCH_HEAD
 }
 
 void * handle_http(void * p_clientfd)
@@ -382,13 +362,10 @@ void * handle_http(void * p_clientfd)
     char * header = getMessage(&clientfd);
 
     httpRequest details = parseRequest(header, &clientfd);
-<<<<<<< HEAD
-    
+
     int headersize = printHeader(details, &clientfd);
-=======
 
     int headersize = printHeader(details.returncode, &clientfd);
->>>>>>> FETCH_HEAD
     int pagesize   = printFile(details.filename, &clientfd);
 
     printf("Headersize: %d\nPagesize: %d\n", headersize, pagesize);
