@@ -239,7 +239,7 @@ httpRequest parseRequest(char *msg, int* fd)
 int printHeader(httpRequest details, int* fd)
 {
 
-    char *header200 = "HTTP/1.0 200 OK\nServer: myserver v0.1\nContent-Type: image/jpg\nContent-Transfer-Encoding: binary\n\n";
+    //char *header200 = "HTTP/1.0 200 OK\nServer: myserver v0.1\nContent-Type: image/jpg\nContent-Transfer-Encoding: binary\n\n";
     //char *headerStart = "HTTP/1.0 ";
     //char *headerEnd   = "\nServer: myserver v0.1\nContent-Type: text/html\n\n";
     //char *hd = malloc(sizeof(headerStart) + sizeof(headerEnd) + 30);
@@ -349,8 +349,6 @@ int printFile(char *filename, int* fd)
     }
     close(file_desc);
     return (int)stat_buf.st_size;
-
-    return totalsize;
 }
 
 void * handle_http(void * p_clientfd)
@@ -365,7 +363,7 @@ void * handle_http(void * p_clientfd)
 
     int headersize = printHeader(details, &clientfd);
 
-    int headersize = printHeader(details.returncode, &clientfd);
+    //int headersize = printHeader(details.returncode, &clientfd);
     int pagesize   = printFile(details.filename, &clientfd);
 
     printf("Headersize: %d\nPagesize: %d\n", headersize, pagesize);
