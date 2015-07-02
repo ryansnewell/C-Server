@@ -15,6 +15,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <signal.h>
+#include <errno.h>
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -24,14 +25,19 @@
 //#include <sys/sendfile.h> //linux
 #include <netinet/in.h>
 
+#define SERVERNAME "DOOFS SERVER/0.0.5\n"
+
 // TODO add support for parameters
 typedef struct {
     int returncode;
     char *filename;
     char *ext;
+    char *server;
+    char *type;
+    char *transfer_encoding;
 } httpRequest;
 
-char *connection;
+
 
 void handleExit(int code, int* fd)
 {
@@ -175,63 +181,92 @@ httpRequest parseRequest(char *msg, int* fd)
     
     FILE *exists = fopen(filename, "r");
     
+    ret.server = SERVERNAME;
     if(test != NULL)
     {
         ret.returncode = 400;
         ret.filename   = "html/400.html";
         ret.ext        = ".html";
+        ret.type       = "text/html\n";
     } else if(test2 == 0) {
         ret.returncode = 200;
         ret.filename   = "html/index.html";
         ret.ext        = ".html";
+        ret.transfer_encoding = NULL;
+        ret.type       = "text/html\n";
     } else if (exists != NULL) {
         ret.returncode = 200;
         ret.filename   = filename;
-        char *extpointer = malloc(sizeof(char) * 10);
-        extpointer = strrchr(filename, '.');
-        char buff[6];
-        memcpy(buff, filename, 5);
-        buff[5] = '\0';
-        ret.ext        = buff;
-        //free(buff);
+        char *buff = strtok(filename, ".");
+        char *ext = strtok(NULL, "");
+        free(buff);
+        ret.ext        = ext;
+        
+        printf("The extension is %s\n", buff);
+        if(strcmp(buff, ".html") != 0){
+            ret.type = "text/html\n";
+            ret.transfer_encoding = NULL;
+        }
+        else {
+            ret.type = strcat("image/", buff);
+            ret.transfer_encoding = "binary\n";
+        }
+        
         fclose(exists);
     } else {
         ret.returncode = 404;
         ret.filename   = "html/404.html";
         ret.ext        = ".html";
+        ret.type       = "text/html\n";
     }
     
     printf("Return code: %d, filename: %s\n", ret.returncode, ret.filename);
     return ret;
 }
 
-int printHeader(int returncode, int* fd)
+int printHeader(httpRequest details, int* fd)
 {
-    char *header200 = "HTTP/1.0 200 OK\nServer: myserver v0.1\nContent-Type: text/html\n\n";
+    char *header200 = "HTTP/1.0 200 OK\nServer: myserver v0.1\nContent-Type: image/jpg\nContent-Transfer-Encoding: binary\n\n";
     char *header400 = "HTTP/1.0 400 Bad Request\nServer: myserver v0.1\nContent-Type: text/html\n\n";
     char *header404 = "HTTP/1.0 404 Not Found\nServer: myserver v0.1\nContent-Type: text/html\n\n";
-    char *hd;
-    printf("printHeader(code = %d)\n", returncode);
-    switch (returncode) {
+    char *hd = malloc(sizeof(char) * 200);
+    hd = strcpy(hd, "HTTP/1.0 ");
+    printf("printHeader(code = %d)\n", details.returncode);
+    switch (details.returncode) {
         case 200:
-            hd = header200;
-            printf("Header set to %d\n", returncode);
+            hd = strcat(hd, "200 OK\n");
+            printf("Header set to %d\n", details.returncode);
             break;
             
         case 400:
-            hd = header400;
-            printf("Header set to %d\n", returncode);
+            hd = strcat(hd, "400 Bad Request\n");
+            printf("Header set to %d\n", details.returncode);
             break;
             
         case 404:
-            hd = header404;
-            printf("Header set to %d\n", returncode);
+            hd = strcat(hd, "404 Not Found\n");
+            printf("Header set to %d\n", details.returncode);
             break;
             
         default:
             return 0;
             break;
     }
+    
+    printf("DEBUG\n");
+    
+    hd = strcat(hd, "Server: ");
+    hd = strcat(hd, details.server);
+    hd = strcat(hd, "Content-Type: ");
+    hd = strcat(hd, details.type);
+    if(details.transfer_encoding)
+    {
+        hd = strcat(hd, "Content-Transfer-Encoding: ");
+        hd = strcat(hd, details.transfer_encoding);
+    }
+    
+    hd = strcat(hd, "\n");
+    printf("hd = %s\n", hd);
     sendMessage(hd, &(*fd));
     return (int)strlen(hd);
 }
@@ -294,11 +329,6 @@ int printFile(char *filename, int* fd)
         printf("Error sending file %s\n", filename);
         handleExit(EXIT_FAILURE, fd);
     }
-    if(rc != stat_buf.st_size)
-    {
-        printf("File transfer not complete:  %d of %d \n", rc, (int)stat_buf.st_size);
-        //handleExit(EXIT_FAILURE, fd);
-    }
     close(file_desc);
     return (int)stat_buf.st_size;
 }
@@ -313,7 +343,7 @@ void * handle_http(void * p_clientfd)
     
     httpRequest details = parseRequest(header, &clientfd);
     
-    int headersize = printHeader(details.returncode, &clientfd);
+    int headersize = printHeader(details, &clientfd);
     int pagesize   = printFile(details.filename, &clientfd);
     
     printf("Headersize: %d\nPagesize: %d\n", headersize, pagesize);
