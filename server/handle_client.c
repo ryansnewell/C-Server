@@ -7,6 +7,7 @@
 
 #include "handle_client.h"
 #include "socket_server.h"
+#include "sendfile.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -16,12 +17,8 @@
 #include <signal.h>
 #include <errno.h>
 
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <sys/uio.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
-//#include <sys/sendfile.h> //linux
 #include <netinet/in.h>
 
 #define SERVERNAME "DOOFS SERVER/0.0.5\n"
@@ -46,6 +43,7 @@ void handleExit(int code, int* fd)
 
 char *getMessage(int* fd)
 {
+
     FILE *sstream;
 
     if( (sstream = fdopen(*fd, "r")) == NULL)
@@ -91,13 +89,6 @@ char *getMessage(int* fd)
         //type = strtok(tmp, ":");
         //parameter = strtok(NULL, "");
 
-
-        char *type = malloc(sizeof(char) * 18);
-        char *parameter = malloc(sizeof(char) * 18);
-
-        type = strtok(tmp, ":");
-        parameter = strtok(NULL, "");
-
         block = realloc(block, size+oldsize);
         oldsize += size;
         strcat(block, tmp);
@@ -105,9 +96,6 @@ char *getMessage(int* fd)
 
     free(tmp);
     //tmp = NULL;
-
-    printf("Not in getMessage()\n");
-
 
     return block;
 }
@@ -129,13 +117,12 @@ char * getFileName(char* msg, int* fd)
 
     //gets file name from msg, puts into file
     sscanf(msg, "GET %s HTTP/1.1", file);
-
+    printf("file = %s\n", file);
     //accepts a quit command
-
-    sscanf(msg, "GET %s HTTP/1.1", file);
-
+    // TODO secure this, this is bad lullz
     if(strcmp(file, "quit") == 0)
     {
+	//output a successpage
         handleExit(EXIT_SUCCESS, fd);
     }
 
@@ -167,6 +154,7 @@ char * getFileName(char* msg, int* fd)
     strcat(base, file);
 
     free(file);
+    printf("base = %s\n", base);
 
     return base;
 
@@ -174,6 +162,7 @@ char * getFileName(char* msg, int* fd)
 
 httpRequest parseRequest(char *msg, int* fd)
 {
+
     httpRequest ret;
 
     char * filename;
@@ -184,7 +173,7 @@ httpRequest parseRequest(char *msg, int* fd)
     }
 
     filename = getFileName(msg, fd);
-
+    printf("getFileName() -> %s\n", filename);
     char *badstring = "..";
     char *test = strstr(filename, badstring);
 
@@ -208,21 +197,30 @@ httpRequest parseRequest(char *msg, int* fd)
         ret.type       = "text/html\n";
     } else if (exists != NULL) {
         ret.returncode = 200;
-        ret.filename   = filename;
+	printf("filename: %s\n", filename);
+	ret.filename   = malloc(sizeof(char) * (strlen(filename) + 1));
+	strcpy(ret.filename, filename);
+        //ret.filename   = filename;
         char *buff = strtok(filename, ".");
         char *ext = strtok(NULL, "");
         free(buff);
         ret.ext        = ext;
 
-        printf("The extension is %s\n", buff);
-        if(strcmp(buff, ".html") != 0){
+        printf("The extension is %s\n", ext);
+        if(strcmp(ext, "html") == 0){
             ret.type = "text/html\n";
             ret.transfer_encoding = NULL;
         }
         else {
-            ret.type = strcat("image/", buff);
+	    char* temp = (char*) malloc(sizeof(char) * 16);
+	    strcpy(temp, "image/");
+            //temp = strcat(temp, "image/");
+	    strcat(temp, ext);
+	    ret.type = strcat(temp, "\n");
+	    //strcpy(ret.type, temp);
+	    free(temp);
             ret.transfer_encoding = "binary\n";
-        }
+	}
 
         fclose(exists);
     } else {
@@ -232,17 +230,18 @@ httpRequest parseRequest(char *msg, int* fd)
         ret.type       = "text/html\n";
     }
 
-    printf("Return code: %d, filename: %s\n", ret.returncode, ret.filename);
+    printf("Return code: %d, filename: %s, ext: %s\n", ret.returncode, ret.filename, ret.ext);
     return ret;
 }
 
 int printHeader(httpRequest details, int* fd)
-{
-
-    //char *header200 = "HTTP/1.0 200 OK\nServer: myserver v0.1\nContent-Type: image/jpg\nContent-Transfer-Encoding: binary\n\n";
+{    
+//char *header200 = "HTTP/1.0 200 OK\nServer: myserver v0.1\nContent-Type: image/jpg\nContent-Transfer-Encoding: binary\n\n";
     //char *headerStart = "HTTP/1.0 ";
     //char *headerEnd   = "\nServer: myserver v0.1\nContent-Type: text/html\n\n";
     //char *hd = malloc(sizeof(headerStart) + sizeof(headerEnd) + 30);
+	
+    // TODO make dynamic headers
 
     char *header200 = "HTTP/1.0 200 OK\nServer: myserver v0.1\nContent-Type: text/html\n\n";
     char *header400 = "HTTP/1.0 400 Bad Request\nServer: myserver v0.1\nContent-Type: text/html\n\n";
@@ -275,6 +274,8 @@ int printHeader(httpRequest details, int* fd)
 
     hd = strcat(hd, "Server: ");
     hd = strcat(hd, details.server);
+    hd = strcat(hd, "Filename: ");
+    hd = strcat(hd, details.filename);
     hd = strcat(hd, "Content-Type: ");
     hd = strcat(hd, details.type);
     if(details.transfer_encoding)
@@ -286,11 +287,14 @@ int printHeader(httpRequest details, int* fd)
     hd = strcat(hd, "\n");
     printf("hd = %s\n", hd);
     sendMessage(hd, &(*fd));
+
     return (int)strlen(hd);
 }
 
 int printFile(char *filename, int* fd)
 {
+
+
 /*    FILE *read;
     if( (read = fopen(filename, "r")) == NULL)
     {
@@ -327,6 +331,9 @@ int printFile(char *filename, int* fd)
     struct stat stat_buf;
     off_t offset = 0;
 
+    printf("The filename was %s\n", filename);
+	    
+
     int file_desc = open(filename, O_RDONLY);
     if(file_desc == -1)
     {
@@ -341,13 +348,14 @@ int printFile(char *filename, int* fd)
     }
 
 
-    int rc = sendfile(file_desc, *fd, offset, &stat_buf.st_size, NULL, 0);
+    int rc = sendfd(*fd, file_desc, offset, &stat_buf.st_size);
     if(rc == -1)
     {
         printf("Error sending file %s\n", filename);
         handleExit(EXIT_FAILURE, fd);
     }
     close(file_desc);
+    
     return (int)stat_buf.st_size;
 }
 
